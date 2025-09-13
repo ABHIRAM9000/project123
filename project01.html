@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartMoney AI v4 - Personal Finance Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .dark-gradient { background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #581c87 100%); }
+        .glass-effect { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.1); }
+        .slide-up { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .focus-ring:focus { outline: 2px solid #3B82F6; outline-offset: 2px; }
+        .kbd { 
+            background: #374151; 
+            border: 1px solid #4B5563; 
+            border-radius: 4px; 
+            padding: 2px 6px; 
+            font-size: 0.75rem; 
+            font-family: monospace; 
+        }
+        .chart-container { position: relative; height: 200px; }
+        .notification { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            z-index: 1000; 
+            transform: translateX(400px); 
+            transition: transform 0.3s ease; 
+        }
+        .notification.show { transform: translateX(0); }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Keyboard Shortcuts Help -->
+    <div id="shortcutsHelp" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold mb-4">Keyboard Shortcuts</h3>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between"><span>Add Transaction</span><span class="kbd">Ctrl + N</span></div>
+                <div class="flex justify-between"><span>Search</span><span class="kbd">Ctrl + K</span></div>
+                <div class="flex justify-between"><span>Toggle Theme</span><span class="kbd">Ctrl + T</span></div>
+                <div class="flex justify-between"><span>Export Data</span><span class="kbd">Ctrl + E</span></div>
+                <div class="flex justify-between"><span>Show Help</span><span class="kbd">?</span></div>
+                <div class="flex justify-between"><span>Close Modal</span><span class="kbd">Esc</span></div>
+            </div>
+            <button id="closeHelp" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg transition-all">Close</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="dark-gradient shadow-xl">
+        <div class="max-w-6xl mx-auto px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold">SmartMoney AI v4</h1>
+                        <p class="text-blue-200 text-xs">Streamlined Finance Dashboard</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <input 
+                            id="searchInput" 
+                            type="text" 
+                            placeholder="Search transactions... (Ctrl+K)"
+                            class="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 pl-10 w-64 focus-ring text-sm"
+                        >
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400 text-sm"></i>
+                    </div>
+                    <button id="addBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-all focus-ring">
+                        <i class="fas fa-plus mr-1"></i>Add
+                    </button>
+                    <button id="helpBtn" class="glass-effect px-3 py-2 rounded-lg hover:bg-white hover:bg-opacity-20 transition-all focus-ring">
+                        <i class="fas fa-question"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-6xl mx-auto px-6 py-6">
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-4 rounded-xl slide-up">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-blue-200 text-sm">Balance</p>
+                        <p class="text-2xl font-bold" id="currentBalance">$8,450</p>
+                    </div>
+                    <i class="fas fa-wallet text-2xl text-blue-300"></i>
+                </div>
+            </div>
+            <div class="bg-gradient-to-r from-green-600 to-green-700 p-4 rounded-xl slide-up">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-green-200 text-sm">This Month</p>
+                        <p class="text-2xl font-bold" id="monthlyIncome">+$4,200</p>
+                    </div>
+                    <i class="fas fa-arrow-up text-2xl text-green-300"></i>
+                </div>
+            </div>
+            <div class="bg-gradient-to-r from-red-600 to-red-700 p-4 rounded-xl slide-up">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-red-200 text-sm">Expenses</p>
+                        <p class="text-2xl font-bold" id="monthlyExpenses">-$2,890</p>
+                    </div>
+                    <i class="fas fa-arrow-down text-2xl text-red-300"></i>
+                </div>
+            </div>
+            <div class="bg-gradient-to-r from-purple-600 to-purple-700 p-4 rounded-xl slide-up">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-purple-200 text-sm">Savings Rate</p>
+                        <p class="text-2xl font-bold" id="savingsRate">31%</p>
+                    </div>
+                    <i class="fas fa-piggy-bank text-2xl text-purple-300"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column - Charts -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Spending Trend Chart -->
+                <div class="bg-gray-800 rounded-xl p-6 slide-up">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Weekly Spending Trend</h3>
+                        <div class="flex space-x-2">
+                            <button class="period-btn bg-blue-600 px-3 py-1 rounded text-sm focus-ring" data-period="week">Week</button>
+                            <button class="period-btn bg-gray-600 px-3 py-1 rounded text-sm focus-ring" data-period="month">Month</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="spendingChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                        <div>
+                            <p class="text-2xl font-bold text-blue-400" id="avgDaily">$127</p>
+                            <p class="text-xs text-gray-400">Avg Daily</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-green-400" id="bestDay">$89</p>
+                            <p class="text-xs text-gray-400">Best Day</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-red-400" id="worstDay">$245</p>
+                            <p class="text-xs text-gray-400">Highest Day</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Breakdown Chart -->
+                <div class="bg-gray-800 rounded-xl p-6 slide-up">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Category Breakdown</h3>
+                        <button id="refreshCategories" class="text-blue-400 hover:text-blue-300 focus-ring rounded px-2 py-1">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="flex items-center"><span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>Food</span>
+                            <span class="font-semibold">$680</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="flex items-center"><span class="w-3 h-3 bg-green-500 rounded-full mr-2"></span>Transport</span>
+                            <span class="font-semibold">$320</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="flex items-center"><span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>Shopping</span>
+                            <span class="font-semibold">$450</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="flex items-center"><span class="w-3 h-3 bg-orange-500 rounded-full mr-2"></span>Entertainment</span>
+                            <span class="font-semibold">$180</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="bg-gray-800 rounded-xl p-6 slide-up">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">Recent Transactions</h3>
+                        <button id="clearSearch" class="text-gray-400 hover:text-white text-sm focus-ring rounded px-2 py-1">Clear Filter</button>
+                    </div>
+                    <div id="transactionsList" class="space-y-3 max-h-64 overflow-y-auto">
+                        <!-- Transactions populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Controls & Info -->
+            <div class="space-y-6">
+                <!-- Quick Actions -->
+                <div class="bg-gray-800 rounded-xl p-6 slide-up">
+                    <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+                    <div class="space-y-3">
+                        <button id="addExpenseBtn" class="w-full bg-red-600 hover:bg-red-700 py-3 rounded-lg transition-all focus-ring">
+                            <i class="fas fa-minus mr-2"></i>Add Expense
+                        </button>
+                        <button id="addIncomeBtn" class="w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg transition-all focus-ring">
+                            <i class="fas fa-plus mr-2"></i>Add Income
+                        </button>
+                        <button id="exportBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg transition-all focus-ring">
+                            <i class="fas fa-download mr-2"></i>Export Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Budget Progress -->
+                <div class="bg-gray-800 rounded-xl p-6 slide-up">
+                    <h3 class="text-lg font-semibold mb-4">Monthly Budget</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm mb-2">
+                                <span>Food & Dining</span>
+                                <span class="text-blue-400">$680 / $800</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 85%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-2">
+                                <span>Transportation</span>
+                                <span class="text-green-400">$320 / $500</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: 64%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-2">
+                                <span>Entertainment</span>
+                                <span class="text-purple-400">$180 / $300</span>
+                            </div>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-purple-500 h-2 rounded-full transition-all duration-500" style="width: 60%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Insights -->
+                <div class="bg-gradient-to-r from-purple-900 to-blue-900 rounded-xl p-6 slide-up">
+                    <h3 class="text-lg font-semibold mb-4">AI Insights</h3>
+                    <div class="space-y-3">
+                        <div class="p-3 bg-black bg-opacity-30 rounded-lg">
+                            <p class="text-sm text-green-300">
+                                <i class="fas fa-lightbulb mr-2"></i>
+                                You're saving 12% more than last month!
+                            </p>
+                        </div>
+                        <div class="p-3 bg-black bg-opacity-30 rounded-lg">
+                            <p class="text-sm text-yellow-300">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                Food spending is 15% above average
+                            </p>
+                        </div>
+                        <div class="p-3 bg-black bg-opacity-30 rounded-lg">
+                            <p class="text-sm text-blue-300">
+                                <i class="fas fa-chart-line mr-2"></i>
+                                On track to save $1,200 this month
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Transaction Modal -->
+    <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-40">
+        <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold">Add Transaction</h2>
+                <button id="closeModal" class="text-gray-400 hover:text-white focus-ring rounded p-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="transactionForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Amount ($)</label>
+                    <input 
+                        type="number" 
+                        id="amount" 
+                        step="0.01" 
+                        required
+                        class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus-ring text-white" 
+                        placeholder="0.00"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                    <input 
+                        type="text" 
+                        id="description" 
+                        required
+                        class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus-ring text-white" 
+                        placeholder="What was this for?"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Category</label>
+                    <select id="category" class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus-ring text-white">
+                        <option value="food">🍽️ Food & Dining</option>
+                        <option value="transport">🚗 Transportation</option>
+                        <option value="shopping">🛍️ Shopping</option>
+                        <option value="entertainment">🎬 Entertainment</option>
+                        <option value="utilities">⚡ Utilities</option>
+                        <option value="healthcare">💊 Healthcare</option>
+                        <option value="income">💰 Income</option>
+                    </select>
+                </div>
+                <div class="flex space-x-3">
+                    <button type="button" id="expenseBtn" class="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-lg transition-all focus-ring">
+                        Expense
+                    </button>
+                    <button type="button" id="incomeBtn" class="flex-1 bg-green-600 hover:bg-green-700 py-3 rounded-lg transition-all">
+                        Income
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <script>
+        // Global state
+        let transactions = [
+            { id: 1, description: "Grocery Shopping", amount: 127.50, category: "food", type: "expense", date: new Date() },
+            { id: 2, description: "Spotify Premium", amount: 9.99, category: "entertainment", type: "expense", date: new Date(Date.now() - 86400000) },
+            { id: 3, description: "Freelance Work", amount: 850.00, category: "income", type: "income", date: new Date(Date.now() - 172800000) },
+            { id: 4, description: "Gas Station", amount: 45.20, category: "transport", type: "expense", date: new Date(Date.now() - 259200000) },
+            { id: 5, description: "Coffee Shop", amount: 12.50, category: "food", type: "expense", date: new Date(Date.now() - 345600000) }
+        ];
+
+        let charts = {};
+        let currentTransactionType = 'expense';
+        let filteredTransactions = [...transactions];
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            updateTransactionsList();
+            updateStats();
+            setupEventListeners();
+            setupKeyboardShortcuts();
+        });
+
+        function initializeCharts() {
+            // Spending Trend Chart
+            const spendingCtx = document.getElementById('spendingChart').getContext('2d');
+            charts.spending = new Chart(spendingCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Daily Spending',
+                        data: [89, 156, 203, 127, 245, 189, 167],
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#3B82F6',
+                        pointBorderColor: '#1E40AF',
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { 
+                            ticks: { color: '#9CA3AF' }, 
+                            grid: { color: '#374151' } 
+                        },
+                        y: { 
+                            ticks: { 
+                                color: '#9CA3AF', 
+                                callback: value => '$' + value 
+                            }, 
+                            grid: { color: '#374151' } 
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
+
+            // Category Chart
+            const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+            charts.category = new Chart(categoryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Food', 'Transport', 'Shopping', 'Entertainment'],
+                    datasets: [{
+                        data: [680, 320, 450, 180],
+                        backgroundColor: ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        function setupEventListeners() {
+            // Modal controls
+            document.getElementById('addBtn').addEventListener('click', () => openModal());
+            document.getElementById('addExpenseBtn').addEventListener('click', () => openModal('expense'));
+            document.getElementById('addIncomeBtn').addEventListener('click', () => openModal('income'));
+            document.getElementById('closeModal').addEventListener('click', closeModal);
+            document.getElementById('helpBtn').addEventListener('click', () => toggleHelp());
+            document.getElementById('closeHelp').addEventListener('click', () => toggleHelp());
+
+            // Transaction type buttons
+            document.getElementById('expenseBtn').addEventListener('click', () => setTransactionType('expense'));
+            document.getElementById('incomeBtn').addEventListener('click', () => setTransactionType('income'));
+
+            // Form submission
+            document.getElementById('transactionForm').addEventListener('submit', handleFormSubmit);
+
+            // Search functionality
+            document.getElementById('searchInput').addEventListener('input', handleSearch);
+            document.getElementById('clearSearch').addEventListener('click', clearSearch);
+
+            // Period buttons
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.period-btn').forEach(b => {
+                        b.classList.remove('bg-blue-600');
+                        b.classList.add('bg-gray-600');
+                    });
+                    e.target.classList.remove('bg-gray-600');
+                    e.target.classList.add('bg-blue-600');
+                    updateChartPeriod(e.target.dataset.period);
+                });
+            });
+
+            // Export functionality
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            document.getElementById('refreshCategories').addEventListener('click', refreshCharts);
+
+            // Click outside modal to close
+            document.getElementById('addModal').addEventListener('click', (e) => {
+                if (e.target.id === 'addModal') closeModal();
+            });
+
+            // Auto-categorization
+            document.getElementById('description').addEventListener('input', autoCategorizе);
+        }
+
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+N - Add transaction
+                if (e.ctrlKey && e.key === 'n') {
+                    e.preventDefault();
+                    openModal();
+                }
+                
+                // Ctrl+K - Focus search
+                if (e.ctrlKey && e.key === 'k') {
+                    e.preventDefault();
+                    document.getElementById('searchInput').focus();
+                }
+                
+                // Ctrl+E - Export data
+                if (e.ctrlKey && e.key === 'e') {
+                    e.preventDefault();
+                    exportData();
+                }
+                
+                // Escape - Close modals
+                if (e.key === 'Escape') {
+                    closeModal();
+                    toggleHelp(false);
+                }
+                
+                // ? - Show help
+                if (e.key === '?' && !e.ctrlKey && !e.altKey) {
+                    e.preventDefault();
+                    toggleHelp();
+                }
+
+                // Arrow keys for navigation in transaction list
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    navigateTransactions(e.key === 'ArrowDown');
+                }
+            });
+        }
+
+        function openModal(type = 'expense') {
+            document.getElementById('addModal').classList.remove('hidden');
+            document.getElementById('addModal').classList.add('flex');
+            setTransactionType(type);
+            document.getElementById('amount').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('addModal').classList.add('hidden');
+            document.getElementById('addModal').classList.remove('flex');
+            document.getElementById('transactionForm').reset();
+        }
+
+        function toggleHelp(show = null) {
+            const help = document.getElementById('shortcutsHelp');
+            if (show === null) {
+                help.classList.toggle('hidden');
+                help.classList.toggle('flex');
+            } else if (show) {
+                help.classList.remove('hidden');
+                help.classList.add('flex');
+            } else {
+                help.classList.add('hidden');
+                help.classList.remove('flex');
+            }
+        }
+
+        function setTransactionType(type) {
+            currentTransactionType = type;
+            const expenseBtn = document.getElementById('expenseBtn');
+            const incomeBtn = document.getElementById('incomeBtn');
+            
+            if (type === 'expense') {
+                expenseBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                expenseBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+                incomeBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+                incomeBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            } else {
+                incomeBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                incomeBtn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+                expenseBtn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+                expenseBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            }
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const amount = parseFloat(document.getElementById('amount').value);
+            const description = document.getElementById('description').value.trim();
+            const category = document.getElementById('category').value;
+            
+            if (!amount || !description) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+
+            const newTransaction = {
+                id: Date.now(),
+                description,
+                amount,
+                category: currentTransactionType === 'income' ? 'income' : category,
+                type: currentTransactionType,
+                date: new Date()
+            };
+
+            transactions.unshift(newTransaction);
+            updateTransactionsList();
+            updateStats();
+            refreshCharts();
+            closeModal();
+            
+            showNotification(`${currentTransactionType === 'income' ? 'Income' : 'Expense'} added successfully!`, 'success');
+        }
+
+        function handleSearch(e) {
+            const query = e.target.value.toLowerCase();
+            filteredTransactions = transactions.filter(t => 
+                t.description.toLowerCase().includes(query) ||
+                t.category.toLowerCase().includes(query)
+            );
+            updateTransactionsList();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            filteredTransactions = [...transactions];
+            updateTransactionsList();
+        }
+
+        function autoCategorizе(e) {
+            const text = e.target.value.toLowerCase();
+            const categorySelect = document.getElementById('category');
+            
+            if (text.includes('coffee') || text.includes('restaurant') || text.includes('grocery') || text.includes('food')) {
+                categorySelect.value = 'food';
+            } else if (text.includes('gas') || text.includes('uber') || text.includes('bus') || text.includes('metro')) {
+                categorySelect.value = 'transport';
+            } else if (text.includes('netflix') || text.includes('spotify') || text.includes('movie') || text.includes('game')) {
+                categorySelect.value = 'entertainment';
+            } else if (text.includes('amazon') || text.includes('shopping') || text.includes('clothes') || text.includes('store')) {
+                categorySelect.value = 'shopping';
+            }
+        }
+
+        function updateTransactionsList() {
+            const container = document.getElementById('transactionsList');
+            container.innerHTML = '';
+            
+            const categoryEmojis = {
+                food: '🍽️', transport: '🚗', shopping: '🛍️',
+                entertainment: '🎬', utilities: '⚡', healthcare: '💊', income: '💰'
+            };
+            
+            filteredTransactions.slice(0, 8).forEach((transaction, index) => {
+                const element = document.createElement('div');
+                element.className = 'flex items-center justify-between p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-all cursor-pointer focus-ring';
+                element.tabIndex = 0;
+                element.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">${categoryEmojis[transaction.category] || '💳'}</span>
+                        <div>
+                            <p class="font-medium text-sm">${transaction.description}</p>
+                            <p class="text-xs text-gray-400">${transaction.date.toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold ${transaction.type === 'income' ? 'text-green-400' : 'text-red-400'}">
+                            ${transaction.type === 'income' ? '+' : '-'}$${transaction.amount.toFixed(2)}
+                        </p>
+                    </div>
+                `;
+                
+                element.addEventListener('click', () => showTransactionDetails(transaction));
+                element.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        showTransactionDetails(transaction);
+                    }
+                });
+                
+                container.appendChild(element);
+            });
+        }
+
+        function updateStats() {
+            const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+            const expenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            const balance = income - expenses;
+            const savingsRate = income > 0 ? ((income - expenses) / income * 100).toFixed(0) : 0;
+            
+            document.getElementById('currentBalance').textContent = `$${balance.toLocaleString()}`;
+            document.getElementById('monthlyIncome').textContent = `+$${income.toLocaleString()}`;
+            document.getElementById('monthlyExpenses').textContent = `-$${expenses.toLocaleString()}`;
+            document.getElementById('savingsRate').textContent = `${savingsRate}%`;
+        }
+
+        function updateChartPeriod(period) {
+            if (period === 'week') {
+                charts.spending.data.labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                charts.spending.data.datasets[0].data = [89, 156, 203, 127, 245, 189, 167];
+            } else {
+                charts.spending.data.labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+                charts.spending.data.datasets[0].data = [890, 1200, 950, 1100];
+            }
+            charts.spending.update('active');
+        }
+
+        function refreshCharts() {
+            // Update category chart with real data
+            const categoryTotals = {};
+            transactions.filter(t => t.type === 'expense').forEach(t => {
+                categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+            });
+            
+            const categories = Object.keys(categoryTotals);
+            const amounts = Object.values(categoryTotals);
+            
+            charts.category.data.labels = categories;
+            charts.category.data.datasets[0].data = amounts;
+            charts.category.update('active');
+            
+            showNotification('Charts refreshed with latest data', 'success');
+        }
+
+        function exportData() {
+            const data = {
+                transactions,
+                exportDate: new Date().toISOString(),
+                summary: {
+                    totalTransactions: transactions.length,
+                    totalIncome: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+                    totalExpenses: transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `smartmoney-export-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('Data exported successfully!', 'success');
+        }
+
+        function showTransactionDetails(transaction) {
+            showNotification(`${transaction.description}: $${transaction.amount} (${transaction.category})`, 'info');
+        }
+
+        function navigateTransactions(down) {
+            const transactions = document.querySelectorAll('#transactionsList > div');
+            const focused = document.activeElement;
+            const currentIndex = Array.from(transactions).indexOf(focused);
+            
+            if (currentIndex === -1) {
+                if (transactions.length > 0) transactions[0].focus();
+                return;
+            }
+            
+            const nextIndex = down ? 
+                Math.min(currentIndex + 1, transactions.length - 1) : 
+                Math.max(currentIndex - 1, 0);
+            
+            transactions[nextIndex].focus();
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-green-600',
+                error: 'bg-red-600',
+                info: 'bg-blue-600',
+                warning: 'bg-yellow-600'
+            };
+            
+            notification.className = `notification ${colors[type]} text-white p-4 rounded-lg shadow-lg mb-2`;
+            notification.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Show notification
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            // Auto remove after 4 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 4000);
+        }
+
+        // Initialize with sample data update
+        setTimeout(() => {
+            updateStats();
+            refreshCharts();
+        }, 1000);
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'97e6505997979f4d',t:'MTc1Nzc1MjU1NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
